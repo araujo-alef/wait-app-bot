@@ -1,51 +1,74 @@
-const { Client } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const { db } = require('./db.js');
+const { Client } = require("whatsapp-web.js");
+const qrcode = require("qrcode-terminal");
+const { db } = require("./db.js");
 
 const ordersCollection = "orders";
 
 const client = new Client();
 
+let clients = [];
+
 client.on("qr", (qr) => {
-    qrcode.generate(qr, { small: true });
-  });
+  qrcode.generate(qr, { small: true });
+});
 
 client.on("ready", async () => {
-  console.log("Client is ready!");
-
-  db.collection(ordersCollection).onSnapshot((snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-      if(change.type === 'modified') {
+  db.collection(ordersCollection).onSnapshot(
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
         const document = change.doc.data();
-        
-        if (document.lastCall === null) {
+
+        if (change.type === "removed") {
+          let number = document.clientIdentifiers[0];
+
+          if (clients.includes(number)) {
+            let newClients = clients.filter((client) => client !== number);
+            clients = newClients;
+          }
           return;
         }
 
-        client.sendMessage(
-          document.clientIdentifiers[0],
-          "Seu pedido está pronto, aproveite!"
-        );
-      }
-    })
-  }, (error) => {
-    console.error("Erro ao escutar Firestore:", error);
-  });
+        if (change.type === "modified") {
+          let number = document.clientIdentifiers[0];
+
+          if (!clients.includes(number)) {
+            client.sendMessage(
+              number,
+              "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto"
+            );
+
+            clients = [...clients, number];
+            return;
+          }
+
+          if (document.lastCall === null) {
+            return;
+          }
+
+          client.sendMessage(
+            document.clientIdentifiers[0],
+            "Seu pedido está pronto, aproveite!"
+          );
+        }
+      });
+    },
+    (error) => {
+      console.error("Erro ao escutar Firestore:", error);
+    }
+  );
 });
 
 client.on("message_create", async (message) => {
-  try {
-    let messageContent = message.body;
-    let messageNumber = message.from;
+  let messageContent = message.body;
+  let messageNumber = message.from;
 
+  try {
     /*   let messageContent =
       "Oi, me avise quando meu pedido estiver pronto: qqxtPckIMpcLNn37riZNxMQgbDs2";
     let messageNumber = "554184719699@c.us"; */
 
-    console.log(messageContent);
-
     if (messageContent.length > 0) {
-      if(!messageContent.includes("pedido")) return;
+      if (!messageContent.includes("pedido")) return;
 
       let words = messageContent.trim().split(" ");
 
@@ -58,7 +81,10 @@ client.on("message_create", async (message) => {
       snapshot.forEach((doc) => {
         if (data !== null) return;
 
-        if (doc.data().partnerId == partnerId) {
+        if (
+          doc.data().partnerId == partnerId &&
+          doc.data().clientIdentifiers.length === 0
+        ) {
           data = {
             id: doc.data().id,
             creationTime: doc.data().creationTime,
@@ -69,10 +95,12 @@ client.on("message_create", async (message) => {
               messageNumber,
             ],
             documentId: doc.data().documentId,
-            partnerId: doc.data().documentId,
+            partnerId: doc.data().partnerId,
           };
         }
       });
+
+      clients = [...clients, messageNumber];
 
       const resposta = await db
         .collection(ordersCollection)
@@ -85,6 +113,11 @@ client.on("message_create", async (message) => {
       );
     }
   } catch (error) {
+    if (clients.includes(messageNumber)) {
+      let newClients = clients.filter((client) => client !== messageNumber);
+      clients = newClients;
+    }
+
     console.log("erro", "=>", error);
   }
 });
