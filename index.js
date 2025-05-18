@@ -1,3 +1,4 @@
+import dotenv from 'dotenv';
 const { Client } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const { db } = require("./db.js");
@@ -8,8 +9,21 @@ const client = new Client();
 
 let clients = [];
 
-client.on("qr", (qr) => {
+dotenv.config();
+
+client.on("qr", async (qr) => {
   qrcode.generate(qr, { small: true });
+
+  try {
+    await db.collection("sessions").doc("whatsapp").set({
+      qr,
+      createdAt: new Date()
+    });
+
+    console.log("QR code salvo no Firestore com sucesso!");
+  } catch (err) {
+    console.error("Erro ao salvar o QR code no Firestore:", err);
+  }
 });
 
 client.on("ready", async () => {
