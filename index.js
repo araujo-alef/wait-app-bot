@@ -1,4 +1,6 @@
-import dotenv from 'dotenv';
+const dotenv = require('dotenv');
+dotenv.config();
+
 const { Client } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const { db } = require("./db.js");
@@ -8,8 +10,6 @@ const ordersCollection = "orders";
 const client = new Client();
 
 let clients = [];
-
-dotenv.config();
 
 client.on("qr", async (qr) => {
   qrcode.generate(qr, { small: true });
