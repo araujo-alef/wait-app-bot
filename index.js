@@ -17,6 +17,8 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const API_KEY = process.env.API_KEY;
 
+const PORT = process.env.PORT || 3000;
+
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -177,4 +179,4 @@ db.collection(ordersCollection).onSnapshot(
     }
   );
 
-app.listen(3000, () => console.log("Servidor rodando na porta 3000 🚀"));
+app.listen(PORT, () => console.log("Servidor rodando na porta ${PORT} 🚀"));
