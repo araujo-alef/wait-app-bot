@@ -19,6 +19,8 @@ const API_KEY = process.env.API_KEY;
 
 const PORT = process.env.PORT || 3000;
 
+console.log("VERIFY_TOKEN carregado:", process.env.VERIFY_TOKEN);
+
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
