@@ -10,7 +10,9 @@ const ordersCollection = "orders";
 let clients = [];
 
 const app = express();
+
 app.use(express.json());
+app.use(express.urlencoded({extended: true}));
 
 const TOKEN = process.env.TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
