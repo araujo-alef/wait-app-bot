@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 
 console.log("VERIFY_TOKEN carregado:", process.env.VERIFY_TOKEN);
 
-app.get("/webhook", (req, res) => {
+app.get("/", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
@@ -44,7 +44,7 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-app.post("/webhook", async (req, res) => {
+app.post("/", async (req, res) => {
   try {
     const entry = req.body.entry?.[0]?.changes?.[0]?.value;
     const message = entry?.messages?.[0];
