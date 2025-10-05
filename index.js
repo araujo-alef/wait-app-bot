@@ -26,11 +26,17 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verificado com sucesso!");
-    return res.status(200).send(challenge);
+  console.log("📥 Recebido GET /webhook");
+  console.log("Query params:", { mode, token, challenge });
+  console.log("VERIFY_TOKEN esperado:", process.env.VERIFY_TOKEN);
+
+  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+    console.log("✅ Webhook verificado com sucesso!");
+    res.status(200).send(challenge);
+  } else {
+    console.log("❌ Falha na verificação do webhook!");
+    res.sendStatus(403);
   }
-  res.sendStatus(403);
 });
 
 app.post("/webhook", async (req, res) => {
