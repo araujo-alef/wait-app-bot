@@ -32,6 +32,9 @@ app.get("/webhook", (req, res) => {
   console.log("Query params:", { mode, token, challenge });
   console.log("VERIFY_TOKEN esperado:", process.env.VERIFY_TOKEN);
 
+  console.log("Headers recebidos:", req.headers);
+  console.log("Query recebida:", req.query);
+
   if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
     console.log("✅ Webhook verificado com sucesso!");
     res.status(200).send(challenge);
