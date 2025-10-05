@@ -1,90 +1,97 @@
 const dotenv = require('dotenv');
 dotenv.config();
 
-const { Client } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
+const express = require("express");
+const axios = require("axios");
 const { db } = require("./db.js");
 
 const ordersCollection = "orders";
 
-const client = new Client();
-
 let clients = [];
 
-client.on("qr", async (qr) => {
-  qrcode.generate(qr, { small: true });
+const app = express();
+app.use(express.json());
 
+const TOKEN = process.env.TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const API_KEY = process.env.API_KEY;
+
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Webhook verificado com sucesso!");
+    return res.status(200).send(challenge);
+  }
+  res.sendStatus(403);
+});
+
+app.post("/webhook", async (req, res) => {
   try {
-    await db.collection("sessions").doc("whatsapp").set({
-      qr,
-      createdAt: new Date()
-    });
+    const entry = req.body.entry?.[0]?.changes?.[0]?.value;
+    const message = entry?.messages?.[0];
 
-    console.log("QR code salvo no Firestore com sucesso!");
+    if (message && message.text) {
+      const phoneNumber = message.from;
+      const text = message.text.body;
+
+      console.log(`Mensagem recebida de ${phoneNumber}: ${text}`);
+      await onReceiveMessage(phoneNumber, text)
+    }
+    res.sendStatus(200);
   } catch (err) {
-    console.error("Erro ao salvar o QR code no Firestore:", err);
+    console.error("Erro no webhook:", err.response?.data || err.message);
+    res.sendStatus(500);
   }
 });
 
-client.on("ready", async () => {
-  db.collection(ordersCollection).onSnapshot(
-    (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        const document = change.doc.data();
+app.post("/send", async (req, res) => {
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== API_KEY) {
+    return res.status(403).json({ error: "Acesso negado" });
+  }
 
-        if (change.type === "removed") {
-          let number = document.clientIdentifiers[0];
-
-          if (clients.includes(number)) {
-            let newClients = clients.filter((client) => client !== number);
-            clients = newClients;
-          }
-          return;
-        }
-
-        if (change.type === "modified") {
-          let number = document.clientIdentifiers[0];
-
-          if (!clients.includes(number)) {
-            client.sendMessage(
-              number,
-              "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto"
-            );
-
-            clients = [...clients, number];
-            return;
-          }
-
-          if (document.lastCall === null) {
-            return;
-          }
-
-          client.sendMessage(
-            document.clientIdentifiers[0],
-            "Seu pedido está pronto, aproveite!"
-          );
-        }
-      });
-    },
-    (error) => {
-      console.error("Erro ao escutar Firestore:", error);
-    }
-  );
+  const { to, message } = req.body;
+  await sendMessage(to, message);
+  res.json({ success: true });
 });
 
-client.on("message_create", async (message) => {
-  let messageContent = message.body;
-  let messageNumber = message.from;
-
+async function sendMessage(phoneNumber, text) {
   try {
-    /*   let messageContent =
-      "Oi, me avise quando meu pedido estiver pronto: qqxtPckIMpcLNn37riZNxMQgbDs2";
-    let messageNumber = "554184719699@c.us"; */
+    const response = await axios.post(
+      `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: phoneNumber,
+        type: "text",
+        text: { body: text },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    if (messageContent.length > 0) {
-      if (!messageContent.includes("pedido")) return;
+    console.log("Mensagem enviada com sucesso:", response.data);
+  } catch (error) {
+    console.error(
+      "Erro ao enviar mensagem:",
+      error.response?.data || error.message
+    );
+  }
+}
 
-      let words = messageContent.trim().split(" ");
+async function onReceiveMessage(phoneNumber, text) {
+  try {
+    if (text.length > 0) {
+      if (!text.includes("pedido")) return;
+
+      let words = text.trim().split(" ");
 
       let partnerId = words[words.length - 1];
 
@@ -106,7 +113,7 @@ client.on("message_create", async (message) => {
             predictedTime: doc.data().predictedTime,
             clientIdentifiers: [
               ...doc.data()["clientIdentifiers"],
-              messageNumber,
+              phoneNumber,
             ],
             documentId: doc.data().documentId,
             partnerId: doc.data().partnerId,
@@ -114,26 +121,60 @@ client.on("message_create", async (message) => {
         }
       });
 
-      clients = [...clients, messageNumber];
+      clients = [...clients, phoneNumber];
 
-      const resposta = await db
+      await db
         .collection(ordersCollection)
         .doc(data.documentId)
         .set(data);
 
-      client.sendMessage(
-        messageNumber,
-        "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto"
-      );
+      await sendMessage(phoneNumber, "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto");
     }
   } catch (error) {
-    if (clients.includes(messageNumber)) {
-      let newClients = clients.filter((client) => client !== messageNumber);
+    if (clients.includes(phoneNumber)) {
+      let newClients = clients.filter((client) => client !== phoneNumber);
       clients = newClients;
     }
 
     console.log("erro", "=>", error);
   }
-});
+}
 
-client.initialize();
+db.collection(ordersCollection).onSnapshot(
+    async (snapshot) => {
+      for (const change of snapshot.docChanges()) {
+        const document = change.doc.data();
+
+        if (change.type === "removed") {
+          let number = document.clientIdentifiers[0];
+
+          if (clients.includes(number)) {
+            let newClients = clients.filter((client) => client !== number);
+            clients = newClients;
+          }
+          return;
+        }
+
+        if (change.type === "modified") {
+          let number = document.clientIdentifiers[0];
+
+          if (!clients.includes(number)) {
+            await sendMessage(number, "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto");
+            clients = [...clients, number];
+            return;
+          }
+
+          if (document.lastCall === null) {
+            return;
+          }
+
+          await sendMessage(document.clientIdentifiers[0], "Seu pedido está pronto, aproveite!");
+        }
+      };
+    },
+    (error) => {
+      console.error("Erro ao escutar Firestore:", error);
+    }
+  );
+
+app.listen(3000, () => console.log("Servidor rodando na porta 3000 🚀"));
