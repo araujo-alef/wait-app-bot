@@ -62,9 +62,28 @@ app.post("/sendOrderNotification", async (req, res) => {
     return res.status(403).json({ error: "Acesso negado" });
   }
 
-  const { to, clientName } = req.body;
-  await sendMessage(to, `🔥 Opa! Acabou de sair do forno o seu pedido em ${clientName}!
-Bora aproveitar, vem matar a fome 😋`);
+  const { to, partnerName } = req.body;
+  await sendMessage(
+    to,
+    `🔥 Opa! Acabou de sair do forno o seu pedido em ${partnerName}!
+Bora aproveitar, vem matar a fome 😋`
+  );
+  res.json({ success: true });
+});
+
+app.post("/sendAddedClientNotification", async (req, res) => {
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== API_KEY) {
+    return res.status(403).json({ error: "Acesso negado" });
+  }
+
+  const { to, partnerName } = req.body;
+  await sendMessage(
+    to,
+    `👋 E aí! ${partnerName} por aqui 😄
+Que bom ter você com a gente!
+Fica de olho, avisaremos assim que seu pedido estiver pronto 🍟✨`
+  );
   res.json({ success: true });
 });
 
