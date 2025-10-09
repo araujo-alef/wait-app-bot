@@ -63,9 +63,8 @@ app.post("/sendOrderNotification", async (req, res) => {
   }
 
   const { to, clientName } = req.body;
-  await sendMessage(to, `👋 E aí! ${clientName} por aqui 😄
-Que bom ter você com a gente!
-Fica de olho, avisaremos assim que seu pedido estiver pronto 🍟✨`);
+  await sendMessage(to, `🔥 Opa! Acabou de sair do forno o seu pedido em ${clientName}!
+Bora aproveitar, vem matar a fome 😋`);
   res.json({ success: true });
 });
 
