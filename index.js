@@ -46,7 +46,6 @@ app.post("/", async (req, res) => {
       const phoneNumber = message.from;
       const text = message.text.body;
 
-      console.log(`Mensagem recebida de ${phoneNumber}: ${text}`);
       await onReceiveMessage(phoneNumber, text)
     }
     res.sendStatus(200);
@@ -112,7 +111,10 @@ async function sendMessageTemplate(phoneNumber, templateName, clientName) {
             {
               type: "body",
               parameters: [
-                { type: "text", text: clientName }
+                { type: "text",
+                  parameter_name: "client_name",
+                  text: clientName, 
+                }
               ],
             },
           ],
