@@ -63,10 +63,10 @@ app.post("/sendOrderNotification", async (req, res) => {
   }
 
   const { to, partnerName } = req.body;
-  await sendMessage(
+  await sendMessageTemplate(
     to,
-    `🔥 Opa! Acabou de sair do forno o seu pedido em ${partnerName}!
-Bora aproveitar, vem matar a fome 😋`
+    'order_ready',
+    partnerName,
   );
   res.json({ success: true });
 });
@@ -78,11 +78,10 @@ app.post("/sendAddedClientNotification", async (req, res) => {
   }
 
   const { to, partnerName } = req.body;
-  await sendMessage(
+  await sendMessageTemplate(
     to,
-    `👋 E aí! ${partnerName} por aqui 😄
-Que bom ter você com a gente!
-Fica de olho, avisaremos assim que seu pedido estiver pronto 🍟✨`
+    'welcome',
+    partnerName,
   );
   res.json({ success: true });
 });
@@ -97,6 +96,44 @@ app.post("/send", async (req, res) => {
   await sendMessage(to, message);
   res.json({ success: true });
 });
+
+async function sendMessageTemplate(phoneNumber, templateName, clientName) {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: phoneNumber,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: "pt_BR" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: clientName }
+              ],
+            },
+          ],
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("✅ Template enviado com sucesso:", response.data);
+  } catch (error) {
+    console.error(
+      "❌ Erro ao enviar template:",
+      error.response?.data || error.message
+    );
+  }
+}
 
 async function sendMessage(phoneNumber, text) {
   try {
@@ -167,11 +204,10 @@ async function onReceiveMessage(phoneNumber, text) {
 
       await db.collection(ordersCollection).doc(data.documentId).set(data);
 
-      await sendMessage(
+      await sendMessageTemplate(
         phoneNumber,
-        `👋 E aí! ${data.partner.name} por aqui
-Que bom ter você com a gente!
-Fique atento, avisaremos assim que seu pedido estiver pronto 🍟✨`
+        'welcome',
+        data.partner.name,
       );
     }
   } catch (error) {
@@ -183,48 +219,5 @@ Fique atento, avisaremos assim que seu pedido estiver pronto 🍟✨`
     console.log("erro", "=>", error);
   }
 }
-
-/* db.collection(ordersCollection).onSnapshot(
-    async (snapshot) => {
-      for (const change of snapshot.docChanges()) {
-        const document = change.doc.data();
-
-        if (change.type === "removed") {
-          let number = document.clientIdentifiers[0];
-
-          if (clients.includes(number)) {
-            let newClients = clients.filter((client) => client !== number);
-            clients = newClients;
-          }
-          return;
-        }
-
-        if (change.type === "modified") {
-          let number = document.clientIdentifiers[0];
-
-          if (!clients.includes(number)) {
-            await sendMessage(
-              number,
-              `👋 E aí! ${document.partner.name} por aqui 😄
-Que bom ter você com a gente!
-Fica de olho, avisaremos assim que seu pedido estiver pronto 🍟✨`
-            );
-            clients = [...clients, number];
-            return;
-          }
-
-          if (document.lastCall === null) {
-            return;
-          }
-
-          await sendMessage(document.clientIdentifiers[0], `🔥 Opa! Acabou de sair do forno o seu pedido em ${document.partner.name}!
-Bora aproveitar, vem matar a fome 😋`);
-        }
-      };
-    },
-    (error) => {
-      console.error("Erro ao escutar Firestore:", error);
-    }
-  ); */
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} 🚀`));
