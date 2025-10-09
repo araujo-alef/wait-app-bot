@@ -21,21 +21,12 @@ const API_KEY = process.env.API_KEY;
 
 const PORT = process.env.PORT || 3000;
 
-console.log("VERIFY_TOKEN carregado:", process.env.VERIFY_TOKEN);
-
 app.get("/", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  console.log("📥 Recebido GET /webhook");
-  console.log("Query params:", { mode, token, challenge });
-  console.log("VERIFY_TOKEN esperado:", process.env.VERIFY_TOKEN);
-
-  console.log("Headers recebidos:", req.headers);
-  console.log("Query recebida:", req.query);
-
-  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("✅ Webhook verificado com sucesso!");
     res.status(200).send(challenge);
   } else {
@@ -61,6 +52,19 @@ app.post("/", async (req, res) => {
     console.error("Erro no webhook:", err.response?.data || err.message);
     res.sendStatus(500);
   }
+});
+
+app.post("/sendOrderNotification", async (req, res) => {
+  const apiKey = req.headers["x-api-key"];
+  if (apiKey !== API_KEY) {
+    return res.status(403).json({ error: "Acesso negado" });
+  }
+
+  const { to, clientName } = req.body;
+  await sendMessage(to, `👋 E aí! ${clientName} por aqui 😄
+Que bom ter você com a gente!
+Fica de olho, avisaremos assim que seu pedido estiver pronto 🍟✨`);
+  res.json({ success: true });
 });
 
 app.post("/send", async (req, res) => {
@@ -118,7 +122,7 @@ async function onReceiveMessage(phoneNumber, text) {
         if (data !== null) return;
 
         if (
-          doc.data().partnerId == partnerId &&
+          doc.data().partner.id == partnerId &&
           doc.data().clientIdentifiers.length === 0
         ) {
           data = {
@@ -131,19 +135,24 @@ async function onReceiveMessage(phoneNumber, text) {
               phoneNumber,
             ],
             documentId: doc.data().documentId,
-            partnerId: doc.data().partnerId,
+            partner: {
+              id: doc.data().partner.id,
+              name: doc.data().partner.name,
+            },
           };
         }
       });
 
       clients = [...clients, phoneNumber];
 
-      await db
-        .collection(ordersCollection)
-        .doc(data.documentId)
-        .set(data);
+      await db.collection(ordersCollection).doc(data.documentId).set(data);
 
-      await sendMessage(phoneNumber, "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto");
+      await sendMessage(
+        phoneNumber,
+        `👋 E aí! ${data.partner.name} por aqui
+Que bom ter você com a gente!
+Fique atento, avisaremos assim que seu pedido estiver pronto 🍟✨`
+      );
     }
   } catch (error) {
     if (clients.includes(phoneNumber)) {
@@ -155,7 +164,7 @@ async function onReceiveMessage(phoneNumber, text) {
   }
 }
 
-db.collection(ordersCollection).onSnapshot(
+/* db.collection(ordersCollection).onSnapshot(
     async (snapshot) => {
       for (const change of snapshot.docChanges()) {
         const document = change.doc.data();
@@ -174,7 +183,12 @@ db.collection(ordersCollection).onSnapshot(
           let number = document.clientIdentifiers[0];
 
           if (!clients.includes(number)) {
-            await sendMessage(number, "Olá, que bom ter você conosco. Fique atento, avisaremos assim que seu pedido estiver pronto");
+            await sendMessage(
+              number,
+              `👋 E aí! ${document.partner.name} por aqui 😄
+Que bom ter você com a gente!
+Fica de olho, avisaremos assim que seu pedido estiver pronto 🍟✨`
+            );
             clients = [...clients, number];
             return;
           }
@@ -183,13 +197,14 @@ db.collection(ordersCollection).onSnapshot(
             return;
           }
 
-          await sendMessage(document.clientIdentifiers[0], "Seu pedido está pronto, aproveite!");
+          await sendMessage(document.clientIdentifiers[0], `🔥 Opa! Acabou de sair do forno o seu pedido em ${document.partner.name}!
+Bora aproveitar, vem matar a fome 😋`);
         }
       };
     },
     (error) => {
       console.error("Erro ao escutar Firestore:", error);
     }
-  );
+  ); */
 
-app.listen(PORT, () => console.log("Servidor rodando na porta ${PORT} 🚀"));
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} 🚀`));
